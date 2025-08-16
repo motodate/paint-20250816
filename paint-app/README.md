@@ -1,5 +1,9 @@
 # ペイントアプリ（HTML版）
 
+> **📚 学習用プロジェクト**  
+> このリポジトリは Claude Code を使用したライブコーディング学習用のテストアプリケーションです。  
+> GitHub Pages での公開を前提として、Svelte 5 + Vite で構築されたシンプルなペイントツールを実装しています。
+
 ブラウザ上で動作するシンプルなペイントツール。Svelte 5 + Vite で構築されており、**ビルド後は静的ファイルとして GitHub Pages などで公開可能**です。
 
 ## 特徴
@@ -37,35 +41,61 @@ npm run dev
 npm run build
 ```
 
-`dist/` フォルダに静的ファイルが生成されます。これらのファイルは **Node.js 不要で、ブラウザだけで動作**します。
+`dist/` フォルダに静的ファイルが生成されます。これらのファイルは **Node.js 不要で、HTTPサーバー上でブラウザだけで動作**します。
+
+### ⚠️ ローカルファイルでは動作しません
+本アプリは ES Modules を使用しているため、**CORS制限により `file://` プロトコルでは動作しません**。
+
+- ❌ **動作しない**: `file:///path/to/index.html` を直接ブラウザで開く
+- ✅ **動作する**: HTTPサーバー経由でアクセス
+
+ローカルで動作確認する場合は、簡易HTTPサーバーを使用してください：
+```bash
+# 方法1: Python
+python -m http.server 8000
+
+# 方法2: Node.js
+npx serve .
+
+# 方法3: PHP  
+php -S localhost:8000
+```
 
 ## GitHub Pages へのデプロイ
 
-### 方法1: 手動デプロイ
+### ⚠️ 重要な注意事項
+GitHub Pages は以下の制約があります：
+- 公開できるのは「リポジトリのルート（/）」または「ルート直下の /docs フォルダ」のみ
+- サブフォルダ（例: /paint-app/dist）からの公開は**不可能**
 
-1. ビルドを実行
+そのため、ビルド後のファイルをリポジトリのルートに配置する必要があります。
+
+### 方法1: 手動デプロイ（リポジトリルートに配置）
+
+1. paint-app ディレクトリでビルドを実行
 ```bash
+cd paint-app
 npm run build
 ```
 
-2. `dist` フォルダの内容を `gh-pages` ブランチにプッシュ
+2. ビルドファイルをリポジトリのルートにコピー
 ```bash
-# gh-pages ブランチがない場合は作成
-git checkout -b gh-pages
+# リポジトリのルートに戻る
+cd ..
 
-# dist フォルダの内容をコピー
-cp -r dist/* .
+# dist の内容をルートにコピー
+cp -r paint-app/dist/* .
 
 # コミット & プッシュ
 git add .
-git commit -m "Deploy to GitHub Pages"
-git push origin gh-pages
+git commit -m "Deploy paint app to GitHub Pages"
+git push origin main
 ```
 
 3. GitHub リポジトリの設定
    - Settings → Pages を開く
    - Source: Deploy from a branch
-   - Branch: `gh-pages` / `/ (root)`
+   - Branch: `main` / `/ (root)`
    - Save をクリック
 
 ### 方法2: GitHub Actions を使った自動デプロイ
@@ -81,60 +111,45 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
-      - run: npm ci
-      - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: './dist'
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/deploy-pages@v4
-        id: deployment
+          cache-dependency-path: ./paint-app/package-lock.json
+      
+      - name: Install and Build
+        run: |
+          cd paint-app
+          npm ci
+          npm run build
+      
+      - name: Copy to root
+        run: |
+          cp -r paint-app/dist/* .
+          
+      - name: Commit and push
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add .
+          git commit -m "Deploy paint app to GitHub Pages" || exit 0
+          git push
 ```
 
 GitHub リポジトリの設定：
 - Settings → Pages
-- Source: GitHub Actions を選択
-
-### 方法3: Vite の gh-pages プラグインを使用
-
-1. プラグインをインストール
-```bash
-npm install --save-dev gh-pages
-```
-
-2. `package.json` に deploy スクリプトを追加
-```json
-{
-  "scripts": {
-    "deploy": "npm run build && gh-pages -d dist"
-  }
-}
-```
-
-3. デプロイ実行
-```bash
-npm run deploy
-```
+- Source: Deploy from a branch
+- Branch: `main` / `/ (root)`
 
 ## 公開 URL
 
